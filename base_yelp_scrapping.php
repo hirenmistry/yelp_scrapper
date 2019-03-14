@@ -6,6 +6,9 @@
  * and open the template in the editor.
  */
 
+//This is sample url you can see***************************************************
+//localhost/scrapping/yelp_scrapper/base_yelp_scrapping.php?url=https://www.yelp.com/biz/hudson-grille-atlanta
+
 $res_company['bizurl']=$_GET['url'];
 if(!empty($res_company['bizurl'])){
     echo getReviewData1($res_company);
@@ -30,6 +33,9 @@ function getReviewData1($res_company){
         
     );
     
+//    Please install python in your localhost 
+//    paste scrap_yelp.py file in path similar as shown below
+//    this python is just use to get dynamic proxy list and static user agent from it.
     $cmdresponse = exec('/usr/bin/python3 /var/www/html/scrapping/yelp_scrapper/scrap_yulp.py');
     $proxy_list_data=json_decode($cmdresponse,true);
   
