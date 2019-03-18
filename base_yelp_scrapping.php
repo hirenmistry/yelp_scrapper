@@ -1,13 +1,19 @@
 <?php
 
 require_once './yelpscrapper.php';
-header('Content-Type: application/json');
+//header('Content-Type: application/json');
+$data = array();
 if (key_exists('url', $_GET)) {
     $bizurl = $_GET['url'];
     $ysObj = new YulpScrapper($bizurl);
-    echo $ysObj->fetchReviews();
+    $data['data'] = $ysObj->fetchReviews();
+    $data['msg'] = '';
+    $data['success'] = true;
 } else {
-    $data['msg'] = "please add url";
     $data['data'] = array();
-    echo json_encode($data);
+    $data['msg'] = "please add url";
+    $data['success'] = false;
 }
+echo '<pre>';
+print_r($data);
+echo '</pre>';

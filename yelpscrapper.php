@@ -1,53 +1,13 @@
 <?php
 
+include_once './proxycaller.php';
+
 class YulpScrapper {
 
-    private static $user_agents_list = [
-        #Chrome
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 5.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
-        #Firefox
-        'Mozilla/4.0 (compatible; MSIE 9.0; Windows NT 6.1)',
-        'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
-        'Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko',
-        'Mozilla/5.0 (Windows NT 6.2; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0; Trident/5.0)',
-        'Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)',
-        'Mozilla/5.0 (Windows NT 6.1; Win64; x64; Trident/7.0; rv:11.0) like Gecko',
-        'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0)',
-        'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)',
-        'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)'
-    ];
+    private static $user_agents_list = [];
     private $scrapingUrl;
 
-    public static function getProxyList() {
-        $cmdresponse = exec('/usr/bin/python3 ' . realpath('scrap_yulp.py'));
-        return json_decode($cmdresponse, true);
-    }
-
-    private function getHtmlFromUrl() {
-        $proxy_list = static::getProxyList();
-
-        $result = $this->fileGetContentsWithProxy($this->scrapingUrl, $proxy_list[array_rand($proxy_list)], static::$user_agents_list[array_rand(static::$user_agents_list)]);
-
-        if (empty($result)) {
-
-            $result = $this->fileGetContentsWithProxy($this->scrapingUrl, $proxy_list[array_rand($proxy_list)], static::$user_agents_list[array_rand(static::$user_agents_list)]);
-        }
-        return $result;
-    }
-
+    // <editor-fold defaultstate="collapsed" desc="Review Grabbing logic which is private">
     private function getReviewMessage($review_match_data) {
         $regex_review_message = '#\<p lang="en">(.+?)\<\/p\>#s';
         preg_match_all($regex_review_message, $review_match_data, $matches_review_message);
@@ -91,13 +51,35 @@ class YulpScrapper {
         return 0;
     }
 
-    private function getTotalReviewCount($reviewPageHtml) {
-        $regex_total_review_main = '#\<div class="biz-page-header-left claim-status">(.+?)<div class=\"biz-page-header-right u-relative\">#s';
-        preg_match_all($regex_total_review_main, $reviewPageHtml, $matches_total_review_main);
+    private function getReviewUserImage($review_match_data) {
 
-        $regex_total_review = '#\<span class=\"review-count rating-qualifier\">(.+?)\<\/span\>#s';
-        preg_match_all($regex_total_review, $matches_total_review_main[1][0], $matches_total_review);
-        if (!empty($matches_total_review_main[1])) {
+        $regex_user_image_base = '#\<div class=\"ypassport media-block\">(.+?)\<\/div\>#s';
+        preg_match_all($regex_user_image_base, $review_match_data, $matches_review_user_name_base);
+
+        $regex_user_image = '#\<img .*? class="photo-box-img" height="60" src=\"(.+?)"#s';
+        preg_match_all($regex_user_image, $matches_review_user_name_base[1][0], $matches_user_image);
+
+        if (!empty($matches_user_image[1])) {
+            return $matches_user_image[1][0];
+        }
+        return "";
+    }
+
+    private function getReviewUserLocation($review_match_data) {
+        $regex_review_location = '#\<li class=\"user-location responsive-hidden-small\">(.+?)\<\/li\>#s';
+        preg_match_all($regex_review_location, $review_match_data, $matches_review_location);
+        $regex_location_name = '#\<b>(.+?)\<\/b\>#s';
+        preg_match_all($regex_location_name, $matches_review_location[1][0], $matches_location_name);
+        if (!empty($matches_location_name[1])) {
+            return $matches_location_name[1][0];
+        }
+        return "";
+    }
+
+    private function getTotalReviewCount($reviewPageHtml) {
+        $regex_total_review = '|<span class="review-count rating-qualifier">(.*?)</span>|s';
+        preg_match_all($regex_total_review, $reviewPageHtml, $matches_total_review);
+        if (!empty($matches_total_review[1])) {
             return $matches_total_review[1][0];
         }
         return 0;
@@ -114,40 +96,39 @@ class YulpScrapper {
                 $reviewPost['data'][$key] = array(
                     'message' => $this->getReviewMessage($review_match_data),
                     'review_date' => $this->getReviewDate($review_match_data),
-                    'review_user_name' => $this->getReviewUserName($review_match_data),
-                    'rating' => $this->getReviewRating($review_match_data)
+                    'review_user_name' => $this->getReviewUserName($review_match_data),                    
+                    'reviewerimage' => $this->getReviewUserImage($review_match_data),
+                    'reviewerlocation' => $this->getReviewUserLocation($review_match_data),
+                    'rating' => $this->getReviewRating($review_match_data),
                 );
             }
         }
         $reviewPost['total_reviews'] = $this->getTotalReviewCount($result);
         $reviewPost['base_url'] = $this->scrapingUrl;
-        return json_encode($reviewPost);
+        return $reviewPost;
     }
 
-    private function fileGetContentsWithProxy($url, $proxyIpAndPort, $useragent) {
-        $context_array = [
-            "http" => [
-                "proxy" => "tcp://" . $proxyIpAndPort,
-                "User-Agent: " . $useragent,
-                "request_fulluri" => true
-            ]
-        ];
+    // </editor-fold>
 
-//    $context_array = array('http'=>array('proxy'=>$proxy,'request_fulluri'=>true));
-        $context = stream_context_create($context_array);
-
-        // Use context stream with file_get_contents
-        $data = file_get_contents($url, false, $context);
-
-        // Return data via proxy
-        return $data;
+    
+    private function getHtmlFromUrl() {
+        $proxy_list = ProxyCaller::getProxyList();
+        $result = ProxyCaller::getResponseFromUrl($this->scrapingUrl, $proxy_list[array_rand($proxy_list)], static::$user_agents_list[array_rand(static::$user_agents_list)], FALSE);
+        if ($result === FALSE || empty($result)) {
+            $result = ProxyCaller::getResponseFromUrl($this->scrapingUrl, $proxy_list[array_rand($proxy_list)], static::$user_agents_list[array_rand(static::$user_agents_list)], FALSE);
+        }
+        return $result;
     }
 
+    
     public function __construct($bizurl) {
         $this->scrapingUrl = $bizurl;
+        if (empty(static::$user_agents_list)) {
+            static::$user_agents_list = ProxyCaller::getUserAgentList();
+        }
     }
 
-    function fetchReviews() {
+    public function fetchReviews() {
         return $this->getReviews();
     }
 
